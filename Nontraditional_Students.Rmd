@@ -1,0 +1,149 @@
+---
+title: "Defining Non-Traditional Students"
+author: "Alex Axthelm"
+date: "2012"
+output:
+  html_document:
+    code_folding: hide
+    highlight: zenburn
+    theme: readable
+    toc: yes
+    toc_float: yes
+  flexdashboard::flex_dashboard:
+    orientation: columns
+  pdf_document:
+    toc: yes
+  word_document:
+    toc: yes
+---
+
+```{r setup_variables, include = FALSE, cache = FALSE}
+is_draft <- TRUE
+
+use_live_sql <- if (Sys.getenv("CONTINUOUS_INTEGRATION") == "true"){
+  FALSE
+} else {
+  TRUE
+  # FALSE
+}
+show_sql_code <- (use_live_sql & is_draft)
+
+set.seed(20170406)
+ptm <- proc.time()[3]
+project_sql_server <- "CHESQLP01VW"
+excel_list <- list()
+```
+
+```{r load_packages, cache = FALSE, message = FALSE, echo = FALSE, include = FALSE}
+library(knitr)
+library(DT)
+library(plotly)
+library(tidyverse)
+library(DBI)
+library(htmltools)
+library(broom)
+library(openxlsx)
+if (use_live_sql) {library(odbc)}
+library(RSQLite)
+library(openssl)
+library(git2r)
+library(secure) # This should be Hadley's secure, not the one from CRAN
+```
+
+```{r set_knitr_options, include = FALSE, cache = FALSE}
+knitr::opts_chunk$set(
+  cache = FALSE,
+  message = is_draft,
+  warning = is_draft,
+  autodep = TRUE
+  )
+```
+
+```{r git_info, include = is_draft, cache = FALSE}
+if (Sys.getenv("CONTINUOUS_INTEGRATION") == "true") {
+  git_info <- NULL
+} else {
+  git_info <- as(git2r::lookup(
+    repo = repository(),
+    sha = branch_target(head(repository()))
+    ),
+  "data.frame"
+  )
+}
+```
+
+```{r UsefulInfo, results = "hold", include = is_draft, eval = is_draft, cache = FALSE}
+print("Draft Information")
+print("Working Directory")
+print(getwd())
+if (!is_null(git_info)) {
+  print("GIT:")
+  print(substr(x = git_info$sha, start = 0, stop = 6))
+  print(git_info$summary)
+  print(git_info$when)
+  
+}
+
+```
+
+```{r load_sample_data, include = !show_sql_code, eval = !use_live_sql}
+# This will only load the encrypted subset of data
+if (secure::has_key()) {
+  data_processed_alpha <- decrypt("dpa")[[1]]
+} else {
+  localname <- paste0(Sys.getenv("USERNAME"), "@", Sys.getenv("computername"))
+  print(paste("Adding User:", localname ,"to Secure Vault"))
+  secure::add_user(
+    name = localname,
+    public_key = local_key()
+    )
+}
+```
+
+```{r Prepare_SQL_connection, include = show_sql_code, eval = TRUE}
+if (use_live_sql) {
+  dbcon <- odbc::dbConnect(
+    drv = odbc::odbc(),
+    driver = "SQL Server",
+    server = project_sql_server,
+    database = "CHEDW",
+    trusted_connection = TRUE
+    )
+} else {
+  dbcon <- dbConnect(RSQLite::SQLite(), ":memory:")
+}
+```
+
+```{sql SQL_raw_ap_data, output.var = "raw_ap_data", include = show_sql_code, eval = use_live_sql, connection = dbcon}
+SELECT
+  s.CSN AS CurrentCSN,
+  hs.HSGraduateCohortKey,
+  apet.APExamType,
+  aper.Score
+FROM CHEDSS.IDOEData.APExamResult AS aper
+LEFT JOIN CHEDSS.IDOEData.APExamType AS apet ON (apet.APExamTypeId = aper.APExamTypeId)
+LEFT JOIN CHEDSS.IDOEData.Student AS s ON (s.STN = aper.STN)
+INNER JOIN CHEDW.dw.FactHighSchoolCohort AS hs ON (hs.STN = s.STN)
+```
+
+
+```{r}
+data_processed_alpha <- raw_ap_data %>%
+  select(CurrentCSN)
+
+```
+
+```{r save_sample_data_block, include = FALSE, eval = use_live_sql}
+# This block is here to make my life easier so that when I am on my local machine, I can create an up to date set of sample data for Travis.
+random_csn_vec <- sample(x = data_processed_alpha$CurrentCSN, size = 10000) # Pick 10000 students at random
+dpa <- data_processed_alpha %>% filter(CurrentCSN %in% random_csn_vec)
+
+secure::encrypt("dpa", dpa)
+remove(dpa)
+```
+
+```{r}
+overlap <- data_processed_alpha %>%
+	group_by(is_undergrad, is_grad, is_prof_practice, is_dual_credit) %>%
+	summarise(num = n())
+```
