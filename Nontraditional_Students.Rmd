@@ -81,7 +81,7 @@ if (!is_null(git_info)) {
   print(substr(x = git_info$sha, start = 0, stop = 6))
   print(git_info$summary)
   print(git_info$when)
-  
+
 }
 
 ```
@@ -129,7 +129,7 @@ INNER JOIN CHEDW.dw.FactHighSchoolCohort AS hs ON (hs.STN = s.STN)
 
 ```{r}
 data_processed_alpha <- raw_ap_data %>%
-  select(CurrentCSN)
+  select(CurrentCSN)git s
 
 ```
 
