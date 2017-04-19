@@ -152,7 +152,7 @@ data_processed_alpha <- raw_ite_data %>%
 random_csn_vec <- sample(x = data_processed_alpha$CurrentCSN, size = 10000) # Pick 10000 students at random
 dpa <- data_processed_alpha %>% filter(CurrentCSN %in% random_csn_vec)
 
-secure::encrypt("dpa", key = local_key(), dpa)
+secure::encrypt("dpa", key = "abc123", dpa)
 remove(dpa)
 ```
 
