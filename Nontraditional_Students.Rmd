@@ -52,7 +52,7 @@ library(secure) # This should be Hadley's secure, not the one from CRAN
 ```
 
 ```{r user_has_key}
-message(paste("has_key", has_key()))
+warning(paste("has_key", has_key()))
 ```
 
 ```{r set_knitr_options, include = FALSE, cache = FALSE}
