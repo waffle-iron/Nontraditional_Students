@@ -23,8 +23,8 @@ is_draft <- TRUE
 use_live_sql <- if (Sys.getenv("CONTINUOUS_INTEGRATION") == "true"){
   FALSE
 } else {
-  TRUE
-  # FALSE
+  # TRUE
+  FALSE
 }
 show_sql_code <- (use_live_sql & is_draft)
 
@@ -90,6 +90,7 @@ if (!is_null(git_info)) {
 ```{r load_sample_data, include = !show_sql_code, eval = !use_live_sql}
 # This will only load the encrypted subset of data
 if (secure::has_key()) {
+  message("This user has a Key")
   data_processed_alpha <- decrypt("dpa")[[1]]
 } else {
   localname <- paste0(Sys.getenv("USERNAME"), "@", Sys.getenv("computername"))
@@ -163,3 +164,6 @@ overlap <- data_processed_alpha %>%
 
 datatable(overlap)
 ```
+Here we can see that there all dual credit students are also counted as undergrad credits (which makes sense), but other types of credit are distinct.
+
+Let's look at a few students
