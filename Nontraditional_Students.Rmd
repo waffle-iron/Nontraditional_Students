@@ -51,6 +51,10 @@ library(PKI)
 library(secure) # This should be Hadley's secure, not the one from CRAN
 ```
 
+```{r user_has_key}
+message(paste("has_key", has_key()))
+```
+
 ```{r set_knitr_options, include = FALSE, cache = FALSE}
 knitr::opts_chunk$set(
   cache = FALSE,
@@ -90,7 +94,6 @@ if (!is_null(git_info)) {
 ```{r load_sample_data, include = !show_sql_code, eval = !use_live_sql}
 # This will only load the encrypted subset of data
 if (secure::has_key()) {
-  message("This user has a Key")
   data_processed_alpha <- decrypt("dpa")[[1]]
 } else {
   localname <- paste0(Sys.getenv("USERNAME"), "@", Sys.getenv("computername"))
@@ -166,4 +169,9 @@ datatable(overlap)
 ```
 Here we can see that there all dual credit students are also counted as undergrad credits (which makes sense), but other types of credit are distinct.
 
-Let's look at a few students
+Let's look at a few students that do not fall into any of thesee categories:
+```{r }
+data_processed_alpha %>%
+  filter(!is_undergrad & !is_grad & !is_prof_practice) %>%
+  datatable()
+```
