@@ -1,0 +1,19 @@
+Imports:
+  knitr,
+  DT,
+  plotly,
+  tidyverse,
+  DBI,
+  htmltools,
+  broom,
+  openxlsx,
+  RSQLite,
+  rmarkdown,
+  devtools,
+  secure,
+  PKI,
+  git2R
+Remotes:
+  s-u/PKI,
+  hadley/secure,
+  rstats-db/odbc

@@ -23,12 +23,12 @@ is_draft <- TRUE
 use_live_sql <- if (Sys.getenv("CONTINUOUS_INTEGRATION") == "true"){
   FALSE
 } else {
-  TRUE
-  # FALSE
+  # TRUE
+  FALSE
 }
 show_sql_code <- (use_live_sql & is_draft)
 
-set.seed(20170406)
+set.seed(20170419)
 ptm <- proc.time()[3]
 project_sql_server <- "CHESQLP01VW"
 excel_list <- list()
@@ -114,23 +114,36 @@ if (use_live_sql) {
 }
 ```
 
-```{sql SQL_raw_ap_data, output.var = "raw_ap_data", include = show_sql_code, eval = use_live_sql, connection = dbcon}
+```{sql SQL_raw_ite_data, output.var = "raw_ite_data", include = show_sql_code, eval = use_live_sql, connection = dbcon}
 SELECT
-  s.CSN AS CurrentCSN,
-  hs.HSGraduateCohortKey,
-  apet.APExamType,
-  aper.Score
-FROM CHEDSS.IDOEData.APExamResult AS aper
-LEFT JOIN CHEDSS.IDOEData.APExamType AS apet ON (apet.APExamTypeId = aper.APExamTypeId)
-LEFT JOIN CHEDSS.IDOEData.Student AS s ON (s.STN = aper.STN)
-INNER JOIN CHEDW.dw.FactHighSchoolCohort AS hs ON (hs.STN = s.STN)
+  s.CurrentCSN,
+  ite.TermKey,
+  dt.FiscalYearKey,
+  dt.TermCode,
+  ite.LocationKey,
+  ite.ProgramMajorKey,
+  ite.StudentFAStatusKey,
+  ite.TransferCredit,
+  ite.OtherAlternativeCredit,
+  ite.UnderGradCreditEoT,
+  ite.GradCreditEoT,
+  ite.ProfPracticeCreditEoT,
+  ite.DualCreditTotalCreditEoT
+FROM CHEDW.dw.DimStudent AS s
+LEFT JOIN CHEDW.dw.FactInstTermEnrollment AS ite ON (ite.StudentKey = s.StudentKey)
+LEFT JOIN CHEDW.dw.DimTerm AS dt ON (dt.TermKey = ite.TermKey)
 ```
 
 
-```{r}
-data_processed_alpha <- raw_ap_data %>%
-  select(CurrentCSN)git s
-
+```{r include = show_sql_code, eval = use_live_sql}
+data_processed_alpha <- raw_ite_data %>%
+  mutate(
+    is_undergrad = UnderGradCreditEoT >0,
+    is_grad = GradCreditEoT >0,
+    is_prof_practice = ProfPracticeCreditEoT > 0,
+    is_dual_credit = DualCreditTotalCreditEoT > 0,
+    has_incoming_credit = (OtherAlternativeCredit > 0) | (TransferCredit > 0)
+    )
 ```
 
 ```{r save_sample_data_block, include = FALSE, eval = use_live_sql}
@@ -144,6 +157,8 @@ remove(dpa)
 
 ```{r}
 overlap <- data_processed_alpha %>%
-	group_by(is_undergrad, is_grad, is_prof_practice, is_dual_credit) %>%
-	summarise(num = n())
+  group_by(is_undergrad, is_grad, is_prof_practice, is_dual_credit) %>%
+  summarise(num = n())
+
+datatable(overlap)
 ```

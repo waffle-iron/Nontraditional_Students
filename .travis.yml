@@ -1,0 +1,14 @@
+language: R
+cache: packages
+addons:
+  apt:
+    sources:
+    - ubuntu-toolchain-r-test
+    packages:
+    - unixodbc
+    - unixodbc-dev
+    - tdsodbc
+    - libsqliteodbc
+
+script:
+  make travis
