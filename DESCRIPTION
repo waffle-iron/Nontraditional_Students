@@ -12,7 +12,8 @@ Imports:
   devtools,
   secure,
   PKI,
-  git2R
+  git2r,
+  odbc,
 Remotes:
   s-u/PKI,
   hadley/secure,

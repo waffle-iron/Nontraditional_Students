@@ -1,5 +1,7 @@
 language: R
 cache: packages
+dist: trusty
+sudo: false
 addons:
   apt:
     sources:
@@ -11,4 +13,4 @@ addons:
     - libsqliteodbc
 
 script:
-  make travis
+- make travis
