@@ -47,6 +47,7 @@ if (use_live_sql) {library(odbc)}
 library(RSQLite)
 library(openssl)
 library(git2r)
+library(PKI)
 library(secure) # This should be Hadley's secure, not the one from CRAN
 ```
 
