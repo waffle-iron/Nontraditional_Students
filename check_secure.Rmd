@@ -53,5 +53,5 @@ library(secure) # This should be Hadley's secure, not the one from CRAN
 
 ```{r user_has_key}
 print(paste("has_key", has_key()))
-my_key()
+local_key()
 ```
