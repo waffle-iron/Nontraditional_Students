@@ -1,0 +1,57 @@
+---
+title: "Defining Non-Traditional Students"
+author: "Alex Axthelm"
+date: "2012"
+output:
+  html_document:
+    code_folding: hide
+    highlight: zenburn
+    theme: readable
+    toc: yes
+    toc_float: yes
+  flexdashboard::flex_dashboard:
+    orientation: columns
+  pdf_document:
+    toc: yes
+  word_document:
+    toc: yes
+---
+
+```{r setup_variables, include = FALSE, cache = FALSE}
+is_draft <- TRUE
+
+use_live_sql <- if (Sys.getenv("CONTINUOUS_INTEGRATION") == "true"){
+  FALSE
+} else {
+  # TRUE
+  FALSE
+}
+show_sql_code <- (use_live_sql & is_draft)
+
+set.seed(20170419)
+ptm <- proc.time()[3]
+project_sql_server <- "CHESQLP01VW"
+excel_list <- list()
+```
+
+```{r load_packages, cache = FALSE, message = FALSE, echo = FALSE, include = FALSE}
+library(knitr)
+library(DT)
+library(plotly)
+library(tidyverse)
+library(DBI)
+library(htmltools)
+library(broom)
+library(openxlsx)
+if (use_live_sql) {library(odbc)}
+library(RSQLite)
+library(openssl)
+library(git2r)
+library(PKI)
+library(secure) # This should be Hadley's secure, not the one from CRAN
+```
+
+```{r user_has_key}
+print(paste("has_key", has_key()))
+my_key()
+```
