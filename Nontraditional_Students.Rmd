@@ -1,7 +1,7 @@
 ---
 title: "Defining Non-Traditional Students"
 author: "Alex Axthelm"
-date: "2012"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
 output:
   html_document:
     code_folding: hide
@@ -23,8 +23,8 @@ is_draft <- TRUE
 use_live_sql <- if (Sys.getenv("CONTINUOUS_INTEGRATION") == "true"){
   FALSE
 } else {
-  # TRUE
-  FALSE
+  TRUE
+  # FALSE
 }
 show_sql_code <- (use_live_sql & is_draft)
 
@@ -133,9 +133,12 @@ SELECT
   ite.UnderGradCreditEoT,
   ite.GradCreditEoT,
   ite.ProfPracticeCreditEoT,
+  ite.UnderGradCreditCensus,
+  ite.GradCreditCensus,
+  ite.ProfPracticeCreditCensus,
   ite.DualCreditTotalCreditEoT
 FROM CHEDW.dw.DimStudent AS s
-LEFT JOIN CHEDW.dw.FactInstTermEnrollment AS ite ON (ite.StudentKey = s.StudentKey)
+INNER JOIN CHEDW.dw.FactInstTermEnrollment AS ite ON (ite.StudentKey = s.StudentKey)
 LEFT JOIN CHEDW.dw.DimTerm AS dt ON (dt.TermKey = ite.TermKey)
 ```
 
@@ -147,6 +150,17 @@ data_processed_alpha <- raw_ite_data %>%
     is_grad = GradCreditEoT >0,
     is_prof_practice = ProfPracticeCreditEoT > 0,
     is_dual_credit = DualCreditTotalCreditEoT > 0,
+    is_guest = (UnderGradCreditEoT + UnderGradCreditCensus == 0
+                & GradCreditEoT + GradCreditCensus == 0
+                & ProfPracticeCreditEoT + ProfPracticeCreditCensus == 0
+                & DualCreditTotalCreditEoT == 0
+    ),
+    is_drop = case_when(
+      .$UnderGradCreditCensus > 0 & .$UnderGradCreditEoT == 0 ~ "Undergrad",
+      .$GradCreditCensus > 0 & .$GradCreditEoT == 0 ~ "Grad",
+      .$ProfPracticeCreditCensus > 0 & .$ProfPracticeCreditEoT == 0 ~ "ProfPractice",
+      TRUE ~ NA_character_
+    ),
     has_incoming_credit = (OtherAlternativeCredit > 0) | (TransferCredit > 0)
     )
 ```
@@ -156,22 +170,17 @@ data_processed_alpha <- raw_ite_data %>%
 random_csn_vec <- sample(x = data_processed_alpha$CurrentCSN, size = 10000) # Pick 10000 students at random
 dpa <- data_processed_alpha %>% filter(CurrentCSN %in% random_csn_vec)
 
+if (file.exists("vault/dpa.rds.enc")) {file.remove("vault/dpa.rds.enc")}
 secure::encrypt("dpa", secret = dpa)
 remove(dpa)
 ```
 
 ```{r}
 overlap <- data_processed_alpha %>%
-  group_by(is_undergrad, is_grad, is_prof_practice, is_dual_credit) %>%
+  group_by(is_undergrad, is_grad, is_prof_practice, is_dual_credit, is_guest, is_drop) %>%
   summarise(num = n())
 
 datatable(overlap)
 ```
 Here we can see that there all dual credit students are also counted as undergrad credits (which makes sense), but other types of credit are distinct.
 
-Let's look at a few students that do not fall into any of thesee categories:
-```{r }
-data_processed_alpha %>%
-  filter(!is_undergrad & !is_grad & !is_prof_practice) %>%
-  datatable()
-```
