@@ -189,7 +189,7 @@ if (use_live_sql) {
   grads_con <- odbc::dbConnect(
     drv = odbc::odbc(),
     driver = "SQL Server",
-    server = "IOTSQLP23vw/P23vwiotPROD",
+    server = "IOTSQLP23vw\\P23vwiotPROD",
     database = "GRADS",
     trusted_connection = TRUE
     )
@@ -197,9 +197,49 @@ if (use_live_sql) {
   dbcon <- dbConnect(RSQLite::SQLite(), ":memory:")
 }
 ```
-```{sql SQL_raw_GRADS_data, output.var = "raw_ite_data", include = show_sql_code, eval = use_live_sql, connection = grads_con}
+```{sql SQL_raw_GRADS_data, output.var = "raw_GRADS_data", include = show_sql_code, eval = use_live_sql, connection = grads_con}
 SELECT
-
+  in_AppId,
+  ch_BusYear,
+  ch_SSN AS DS01,
+  ch_StuCitizenshipCd,
+  ti_FirstBachDegreeFlg,
+  ti_StuMaritalStatusCd,
+  ti_StuBornBeforeFlg,
+  ti_USVeteranFlg,
+  ti_GradStuFlg,
+  ti_StuMarriedFlg,
+  ti_StuOthrDependFlg,
+  ti_OrphanWardFlg,
+  ti_InterestStuJobFlg,
+  ti_InterestStuLoanFlg,
+  ch_GEDEarned,
+  ti_FthEduLevelCd,
+  ti_MthEduLevelCd,
+  ch_PellEligibilityFlg,
+  ch_DependStatusCd -- Is dependent
 FROM GRADS.dbo.Application
+```
 
+```{sql SQL_raw_psm_data, output.var = "raw_psm_data", include = show_sql_code, eval = use_live_sql, connection = dbcon}
+SELECT DISTINCT
+  DS01,
+  CurrentCSN
+FROM CHEDW.research.PostsecondaryMaster
+```
+
+```{r include = show_sql_code, eval = use_live_sql}
+data_processed_fafsa <- raw_GRADS_data %>%
+  left_join(raw_psm_data, by = "DS01") %>%
+  select(-DS01)
+
+```
+
+```{r save_sample_data_block_fafsa, include = FALSE, eval = use_live_sql}
+# This block is here to make my life easier so that when I am on my local machine, I can create an up to date set of sample data for Travis.
+dpf <- data_processed_fafsa %>% filter(CurrentCSN %in% random_csn_vec)
+
+if (file.exists("vault/dpf.rds.enc")) {file.remove("vault/dpf.rds.enc")}
+secure::encrypt("dpf", secret = dpf)
+remove(dpf)
 ```
