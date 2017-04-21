@@ -3,6 +3,9 @@
 *.docx
 *.pdf
 
+#Unecrypted Data Files
+*.RDS
+/data/
 
 # History files
 .Rhistory

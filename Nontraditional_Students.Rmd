@@ -20,11 +20,10 @@ output:
 ```{r setup_variables, include = FALSE, cache = FALSE}
 is_draft <- TRUE
 
-use_live_sql <- if (Sys.getenv("CONTINUOUS_INTEGRATION") == "true"){
+use_live_sql <- if (identical(Sys.getenv("CONTINUOUS_INTEGRATION"), "true")){
   FALSE
 } else {
-  TRUE
-  # FALSE
+  !dir.exists("data")
 }
 show_sql_code <- (use_live_sql & is_draft)
 
@@ -47,12 +46,7 @@ if (use_live_sql) {library(odbc)}
 library(RSQLite)
 library(openssl)
 library(git2r)
-library(PKI)
-library(secure) # This should be Hadley's secure, not the one from CRAN
-```
-
-```{r user_has_key}
-warning(paste("has_key", has_key()))
+library(sodium)
 ```
 
 ```{r set_knitr_options, include = FALSE, cache = FALSE}
@@ -92,16 +86,16 @@ if (!is_null(git_info)) {
 ```
 
 ```{r load_sample_data, include = !show_sql_code, eval = !use_live_sql}
-# This will only load the encrypted subset of data
-if (secure::has_key()) {
-  data_processed_alpha <- decrypt("dpa")[[1]]
+if (file.exists(file.path("data", "data_processed_alpha_tiny.RDS"))){
+  data_processed_alpha <- readRDS(file.path("data", "data_processed_alpha_tiny.RDS"))
 } else {
-  localname <- paste0(Sys.getenv("USERNAME"), "@", Sys.getenv("computername"))
-  print(paste("Adding User:", localname ,"to Secure Vault"))
-  secure::add_user(
-    name = localname,
-    public_key = local_key()
-    )
+    data_processed_alpha <- readRDS(file.path("data", "data_processed_alpha.RDS"))
+}
+
+if (file.exists(file.path("data", "data_processed_fafsa_tiny.RDS"))){
+  data_processed_fafsa <- readRDS(file.path("data", "data_processed_fafsa_tiny.RDS"))
+} else {
+    data_processed_fafsa <- readRDS(file.path("data", "data_processed_fafsa.RDS"))
 }
 ```
 
@@ -142,7 +136,6 @@ INNER JOIN CHEDW.dw.FactInstTermEnrollment AS ite ON (ite.StudentKey = s.Student
 LEFT JOIN CHEDW.dw.DimTerm AS dt ON (dt.TermKey = ite.TermKey)
 ```
 
-
 ```{r include = show_sql_code, eval = use_live_sql}
 data_processed_alpha <- raw_ite_data %>%
   mutate(
@@ -165,14 +158,23 @@ data_processed_alpha <- raw_ite_data %>%
     )
 ```
 
+```{r define_save_function, include = FALSE}
+rewrite_obj_rds <- function(object, dir = "data"){
+  dir.create(path = dir, recursive = TRUE)
+  file <- file.path(dir, paste0(substitute(object), ".RDS"))
+  if (file.exists(file)) {file.remove(file)} #Delete Previous Version of the file
+  saveRDS(object = object, file = file)
+}
+```
+
 ```{r save_sample_data_block, include = FALSE, eval = use_live_sql}
 # This block is here to make my life easier so that when I am on my local machine, I can create an up to date set of sample data for Travis.
 random_csn_vec <- sample(x = data_processed_alpha$CurrentCSN, size = 10000) # Pick 10000 students at random
-dpa <- data_processed_alpha %>% filter(CurrentCSN %in% random_csn_vec)
+data_processed_alpha_tiny <- data_processed_alpha %>% filter(CurrentCSN %in% random_csn_vec)
 
-if (file.exists("vault/dpa.rds.enc")) {file.remove("vault/dpa.rds.enc")}
-secure::encrypt("dpa", secret = dpa)
-remove(dpa)
+rewrite_obj_rds(data_processed_alpha_tiny)
+remove(data_processed_alpha_tiny)
+rewrite_obj_rds(data_processed_alpha)
 ```
 
 ```{r}
@@ -184,3 +186,72 @@ datatable(overlap)
 ```
 Here we can see that there all dual credit students are also counted as undergrad credits (which makes sense), but other types of credit are distinct.
 
+# FAFSA Information
+
+Let's try loading in useful (self-reported) information from each student's FAFSA.
+
+```{r Prepare_GRADS_SQL_connection, include = show_sql_code, eval = TRUE}
+if (use_live_sql) {
+  grads_con <- odbc::dbConnect(
+    drv = odbc::odbc(),
+    driver = "SQL Server",
+    server = "IOTSQLP23vw\\P23vwiotPROD",
+    database = "GRADS",
+    trusted_connection = TRUE
+    )
+} else {
+  grads_con <- dbConnect(RSQLite::SQLite(), ":memory:")
+}
+```
+```{sql SQL_raw_GRADS_data, output.var = "raw_GRADS_data", include = show_sql_code, eval = use_live_sql, connection = grads_con}
+SELECT
+  in_AppId,
+  ch_BusYear,
+  ch_SSN AS DS01,
+  ch_StuCitizenshipCd,
+  ti_FirstBachDegreeFlg,
+  ti_StuMaritalStatusCd,
+  ti_StuBornBeforeFlg,
+  ti_USVeteranFlg,
+  ti_GradStuFlg,
+  ti_StuMarriedFlg,
+  ti_StuOthrDependFlg,
+  ti_OrphanWardFlg,
+  ti_InterestStuJobFlg,
+  ti_InterestStuLoanFlg,
+  ch_GEDEarned,
+  ti_FthEduLevelCd,
+  ti_MthEduLevelCd,
+  ch_PellEligibilityFlg,
+  ch_DependStatusCd -- Is dependent
+FROM GRADS.dbo.Application
+```
+
+```{sql SQL_raw_psm_data, output.var = "raw_psm_data", include = show_sql_code, eval = use_live_sql, connection = dbcon}
+SELECT DISTINCT
+  DS01,
+  CurrentCSN
+FROM CHEDW.research.PostsecondaryMaster
+```
+
+```{r include = show_sql_code, eval = use_live_sql}
+data_processed_fafsa <- raw_GRADS_data %>%
+  inner_join(raw_psm_data, by = "DS01") %>%
+  select(-DS01)
+
+```
+
+```{r save_sample_data_block_fafsa, include = FALSE, eval = use_live_sql}
+# This block is here to make my life easier so that when I am on my local machine, I can create an up to date set of sample data for Travis.
+data_processed_fafsa_tiny <- data_processed_fafsa %>% filter(CurrentCSN %in% random_csn_vec)
+
+rewrite_obj_rds(data_processed_fafsa_tiny)
+remove(data_processed_fafsa_tiny)
+rewrite_obj_rds(data_processed_fafsa)
+```
+
+```{r }
+data_processed_fafsa %>%
+  group_by(ch_PellEligibilityFlg, ch_GEDEarned) %>%
+  summarise(num = n())
+```
