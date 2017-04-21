@@ -243,7 +243,8 @@ data_processed_fafsa <- raw_GRADS_data %>%
 
 ```{r save_sample_data_block_fafsa, include = FALSE, eval = use_live_sql}
 # This block is here to make my life easier so that when I am on my local machine, I can create an up to date set of sample data for Travis.
-data_processed_fafsa_tiny <- data_processed_fafsa %>% filter(CurrentCSN %in% random_csn_vec)
+random_csn_vec_fafsa <- c(random_csn_vec[1:9000], sample(x = data_processed_fafsa$CurrentCSN, size = 1000)) # Pick 9000 student overlap with alpha frame, and then 1000 students at random
+data_processed_fafsa_tiny <- data_processed_fafsa %>% filter(CurrentCSN %in% random_csn_vec_fafsa)
 
 rewrite_obj_rds(data_processed_fafsa_tiny)
 remove(data_processed_fafsa_tiny)
@@ -251,6 +252,7 @@ rewrite_obj_rds(data_processed_fafsa)
 ```
 
 ```{r }
+## Check that the frame exists
 data_processed_fafsa %>%
   group_by(ch_PellEligibilityFlg, ch_GEDEarned) %>%
   summarise(num = n())
