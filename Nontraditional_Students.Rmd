@@ -23,7 +23,7 @@ is_draft <- TRUE
 use_live_sql <- if (identical(Sys.getenv("CONTINUOUS_INTEGRATION"), "true")){
   FALSE
 } else {
-  !dir.exists("data")
+  !(dir.exists("data") & is_draft)
 }
 show_sql_code <- (use_live_sql & is_draft)
 
@@ -48,6 +48,7 @@ library(openssl)
 library(git2r)
 library(sodium)
 library(IndianaCHEmisc)
+library(readr)
 ```
 
 ```{r set_knitr_options, include = FALSE, cache = FALSE}
@@ -139,8 +140,12 @@ data_processed_alpha <- raw_ite_data %>%
   bind_cols(
     IndianaCHEmisc::split_termkey(.$TermKey)
   ) %>%
-  select(-term_name, -termcode -fiscal_year) %>%
+  select(-term_name, -termcode -fiscal_year, -TermKey) %>%
   mutate(term_n = 1) %>%
+  mutate(term_season = readr::parse_factor(
+    term_season,
+    levels = c("Fall", "Spring", "Summer"
+    ))) %>%
   group_by(CurrentCSN, academic_year, term_season, LocationKey, ProgramMajorKey, StudentFAStatusKey) %>%
   summarise_all(sum) %>%
   ungroup() %>%
@@ -204,17 +209,18 @@ datatable(overlap)
 ```
 Here we can see that there all dual credit students are also counted as undergrad credits (which makes sense), but other types of credit are distinct.
 
-## Ordering
-
-Now I want to see if there is a particular order that is relaible for all the students.
-Hypothesis: Dual credit consistently comes before non-dual credit undergrad.
-that comes before Grad or Prof Practice.
-I'm not sure yet if I want to collapse those two, but I don't care about them right now.
-
 ```{r}
 ordering_frame <- data_processed_alpha %>%
-  group_by(CurrentCSN, term_level) %>%
+  unite(col = qx, academic_year, term_season) %>%
+  arrange(CurrentCSN, qx) #%>%
 
+  summarise(
+    min = min(TermKey),
+    max = max(TermKey),
+    num = n()
+    )
+
+datatable(ordering_frame)
 ```
 
 # FAFSA Information
