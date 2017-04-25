@@ -47,6 +47,7 @@ library(RSQLite)
 library(openssl)
 library(git2r)
 library(sodium)
+library(IndianaCHEmisc)
 ```
 
 ```{r set_knitr_options, include = FALSE, cache = FALSE}
@@ -117,8 +118,6 @@ if (use_live_sql) {
 SELECT
   s.CurrentCSN,
   ite.TermKey,
-  dt.FiscalYearKey,
-  dt.TermCode,
   ite.LocationKey,
   ite.ProgramMajorKey,
   ite.StudentFAStatusKey,
@@ -133,26 +132,45 @@ SELECT
   ite.DualCreditTotalCreditEoT
 FROM CHEDW.dw.DimStudent AS s
 INNER JOIN CHEDW.dw.FactInstTermEnrollment AS ite ON (ite.StudentKey = s.StudentKey)
-LEFT JOIN CHEDW.dw.DimTerm AS dt ON (dt.TermKey = ite.TermKey)
 ```
 
 ```{r include = show_sql_code, eval = use_live_sql}
 data_processed_alpha <- raw_ite_data %>%
+  bind_cols(
+    IndianaCHEmisc::split_termkey(.$TermKey)
+  ) %>%
+  select(-term_name, -termcode -fiscal_year) %>%
+  mutate(term_n = 1) %>%
+  group_by(CurrentCSN, academic_year, term_season, LocationKey, ProgramMajorKey, StudentFAStatusKey) %>%
+  summarise_all(sum) %>%
+  ungroup() %>%
   mutate(
-    is_undergrad = UnderGradCreditEoT >0 & DualCreditTotalCreditEoT == 0,
-    is_grad = GradCreditEoT >0,
-    is_prof_practice = ProfPracticeCreditEoT > 0,
-    is_dual_credit = DualCreditTotalCreditEoT > 0,
-    is_guest = (UnderGradCreditEoT + UnderGradCreditCensus == 0
-                & GradCreditEoT + GradCreditCensus == 0
-                & ProfPracticeCreditEoT + ProfPracticeCreditCensus == 0
-                & DualCreditTotalCreditEoT == 0
-    ),
-    is_drop = case_when(
-      .$UnderGradCreditCensus > 0 & .$UnderGradCreditEoT == 0 ~ "Undergrad",
-      .$GradCreditCensus > 0 & .$GradCreditEoT == 0 ~ "Grad",
-      .$ProfPracticeCreditCensus > 0 & .$ProfPracticeCreditEoT == 0 ~ "ProfPractice",
+    # is_undergrad = UnderGradCreditEoT >0 & DualCreditTotalCreditEoT == 0,
+    # is_grad = GradCreditEoT >0,
+    # is_prof_practice = ProfPracticeCreditEoT > 0,
+    # is_dual_credit = DualCreditTotalCreditEoT > 0,
+    # is_guest = (UnderGradCreditEoT + UnderGradCreditCensus == 0
+    #             & GradCreditEoT + GradCreditCensus == 0
+    #             & ProfPracticeCreditEoT + ProfPracticeCreditCensus == 0
+    #             & DualCreditTotalCreditEoT == 0
+    # ),
+    #
+    term_level = case_when(
+      .$DualCreditTotalCreditEoT > 0 ~ "Dual Credit",
+      (.$UnderGradCreditEoT > 0 | .$UnderGradCreditCensus > 0) & .$DualCreditTotalCreditEoT == 0 ~ "Undergrad",
+      (.$GradCreditEoT > 0 | .$GradCreditCensus > 0) ~ "Graduate",
+      (.$ProfPracticeCreditEoT > 0 | .$ProfPracticeCreditCensus > 0) ~ "Professional Practice",
+      (.$UnderGradCreditEoT + .$UnderGradCreditCensus == 0
+                & .$GradCreditEoT + .$GradCreditCensus == 0
+                & .$ProfPracticeCreditEoT + .$ProfPracticeCreditCensus == 0
+                & .$DualCreditTotalCreditEoT == 0
+       ) ~ "Guest",
       TRUE ~ NA_character_
+    ),
+    is_drop = (
+     (UnderGradCreditCensus > 0 & UnderGradCreditEoT == 0) |
+     (GradCreditCensus > 0 & GradCreditEoT == 0) |
+     (ProfPracticeCreditCensus > 0 & ProfPracticeCreditEoT == 0)
     ),
     has_incoming_credit = (OtherAlternativeCredit > 0) | (TransferCredit > 0)
     )
@@ -179,7 +197,7 @@ rewrite_obj_rds(data_processed_alpha)
 
 ```{r}
 overlap <- data_processed_alpha %>%
-  group_by(is_undergrad, is_grad, is_prof_practice, is_dual_credit, is_guest, is_drop) %>%
+  group_by(term_level, is_drop) %>%
   summarise(num = n())
 
 datatable(overlap)
@@ -195,17 +213,8 @@ I'm not sure yet if I want to collapse those two, but I don't care about them ri
 
 ```{r}
 ordering_frame <- data_processed_alpha %>%
-  group_by(CurrentCSN, is_undergrad, is_grad, is_prof_practice, is_dual_credit) %>%
-  summarise(begin = min(TermKey), end = max(TermKey)) %>%
-  ungroup() %>%
-  group_by(CurrentCSN) %>%
-  summarise(
-    dc_beg = max(is_dual_credit * begin),
-    dc_end = max(is_dual_credit * end),
-    ug_beg = max(is_undergrad * begin),
-    ug_end = max(is_undergrad * end),
-    dc_before_ug = dc_end < ug_beg
-    )
+  group_by(CurrentCSN, term_level) %>%
+
 ```
 
 # FAFSA Information
